@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS sale (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id INTEGER NOT NULL,
     sale_date_time TEXT NOT NULL,
+    cancelled_at TEXT,
     FOREIGN KEY (customer_id) REFERENCES customer (id)
 );
 

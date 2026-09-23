@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 from src.models.sale import Sale, SoldItem
 from src.repositories.stock_item_repository import StockItemRepository
@@ -49,6 +50,19 @@ class SaleService:
     def list_purchase_history_by_customer(self, customer_id: int) -> list[Sale]:
         return self.sale_repository.find_purchase_history_by_customer(customer_id)
 
+    def cancel_sale(self, sale_id: int) -> Sale:
+        sale = self.sale_repository.find_by_id(sale_id)
+        if sale is None:
+            raise InvalidSaleDataError(f"Venda {sale_id} não encontrada.")
+        if sale.is_cancelled:
+            raise InvalidSaleDataError("Esta venda já foi cancelada.")
+
+        for sold_item in sale.sold_items:
+            self._credit_quantity_to_stock(sold_item.stock_item_id, sold_item.quantity_sold)
+
+        self.sale_repository.cancel(sale_id, datetime.now())
+        return self.sale_repository.find_by_id(sale_id)
+
     def _convert_to_sold_item(
         self, item_to_sell: ItemToSell, reserved_quantity_by_stock_item_id: dict[int, int]
     ) -> SoldItem:
@@ -78,4 +92,9 @@ class SaleService:
     def _debit_quantity_from_stock(self, stock_item_id: int, quantity_sold: int) -> None:
         stock_item = self.stock_item_repository.find_by_id(stock_item_id)
         new_quantity = stock_item.quantity_in_stock - quantity_sold
+        self.stock_item_repository.update_quantity_in_stock(stock_item_id, new_quantity)
+
+    def _credit_quantity_to_stock(self, stock_item_id: int, quantity_to_return: int) -> None:
+        stock_item = self.stock_item_repository.find_by_id(stock_item_id)
+        new_quantity = stock_item.quantity_in_stock + quantity_to_return
         self.stock_item_repository.update_quantity_in_stock(stock_item_id, new_quantity)

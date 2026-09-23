@@ -86,3 +86,35 @@ def test_list_purchase_history_by_customer_returns_registered_sales(sale_service
     history = sale_service.list_purchase_history_by_customer(customer_id)
 
     assert len(history) == 1
+
+
+def test_cancel_sale_returns_the_quantity_to_stock(sale_service, stock_item_repository, customer_id):
+    item = _create_stock_item(stock_item_repository, quantity_in_stock=10, unit_price=30.0)
+    sale = sale_service.register_sale(customer_id, [ItemToSell(item.id, 3)])
+
+    sale_service.cancel_sale(sale.id)
+
+    assert stock_item_repository.find_by_id(item.id).quantity_in_stock == 10
+
+
+def test_cancel_sale_marks_the_sale_as_cancelled(sale_service, stock_item_repository, customer_id):
+    item = _create_stock_item(stock_item_repository)
+    sale = sale_service.register_sale(customer_id, [ItemToSell(item.id, 1)])
+
+    cancelled_sale = sale_service.cancel_sale(sale.id)
+
+    assert cancelled_sale.is_cancelled
+
+
+def test_cancel_sale_rejects_an_already_cancelled_sale(sale_service, stock_item_repository, customer_id):
+    item = _create_stock_item(stock_item_repository)
+    sale = sale_service.register_sale(customer_id, [ItemToSell(item.id, 1)])
+    sale_service.cancel_sale(sale.id)
+
+    with pytest.raises(InvalidSaleDataError):
+        sale_service.cancel_sale(sale.id)
+
+
+def test_cancel_sale_rejects_a_nonexistent_sale(sale_service):
+    with pytest.raises(InvalidSaleDataError):
+        sale_service.cancel_sale(999)

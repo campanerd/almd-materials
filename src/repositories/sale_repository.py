@@ -59,6 +59,13 @@ class SaleRepository:
         ).fetchall()
         return [self._row_to_sale(row) for row in sale_rows]
 
+    def cancel(self, id: int, cancelled_at: datetime) -> None:
+        self.connection.execute(
+            "UPDATE sale SET cancelled_at = ? WHERE id = ?",
+            (cancelled_at.isoformat(), id),
+        )
+        self.connection.commit()
+
     def _row_to_sale(self, sale_row: sqlite3.Row) -> Sale:
         sold_item_rows = self.connection.execute(
             "SELECT * FROM sold_item WHERE sale_id = ?",
@@ -75,9 +82,14 @@ class SaleRepository:
             for row in sold_item_rows
         ]
 
+        cancelled_at = (
+            datetime.fromisoformat(sale_row["cancelled_at"]) if sale_row["cancelled_at"] else None
+        )
+
         return Sale(
             id=sale_row["id"],
             customer_id=sale_row["customer_id"],
             sale_date_time=datetime.fromisoformat(sale_row["sale_date_time"]),
             sold_items=sold_items,
+            cancelled_at=cancelled_at,
         )

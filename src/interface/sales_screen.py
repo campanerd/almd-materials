@@ -1,3 +1,5 @@
+from tkinter import messagebox
+
 import customtkinter
 
 from src.services.customer_service import CustomerService
@@ -78,6 +80,7 @@ class SalesScreen(customtkinter.CTkFrame):
         self.history_panel = customtkinter.CTkScrollableFrame(self, label_text="Histórico de compras do cliente")
         self.history_panel.grid(row=2, column=1, sticky="nsew", padx=(8, 16), pady=(8, 8))
         self.history_panel.grid_columnconfigure(0, weight=1)
+        self.history_panel.grid_columnconfigure(1, weight=0)
 
         bottom_panel = customtkinter.CTkFrame(self, fg_color="transparent")
         bottom_panel.grid(row=3, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 16))
@@ -92,12 +95,18 @@ class SalesScreen(customtkinter.CTkFrame):
         finalize_button.grid(row=0, column=1, sticky="e")
 
     def refresh_customer_and_item_options(self) -> None:
+        previously_selected_customer_id = self.customer_id_by_name.get(self.customer_menu.get())
+        previously_selected_item_id = self.item_id_by_name.get(self.item_menu.get())
+
         customers = self.customer_service.list_all_customers()
         self.customer_id_by_name = {customer.full_name: customer.id for customer in customers}
         customer_names = list(self.customer_id_by_name) or [NO_CUSTOMER_SELECTED]
         self.customer_menu.configure(values=customer_names)
-        self.customer_menu.set(customer_names[0])
-        self._on_customer_selected(customer_names[0])
+        selected_customer_name = self._find_name_by_id(
+            self.customer_id_by_name, previously_selected_customer_id, customer_names[0]
+        )
+        self.customer_menu.set(selected_customer_name)
+        self._on_customer_selected(selected_customer_name)
 
         items = self.stock_item_service.list_all_items()
         self.item_id_by_name = {
@@ -105,7 +114,19 @@ class SalesScreen(customtkinter.CTkFrame):
         }
         item_names = list(self.item_id_by_name) or [NO_ITEM_SELECTED]
         self.item_menu.configure(values=item_names)
-        self.item_menu.set(item_names[0])
+        selected_item_name = self._find_name_by_id(
+            self.item_id_by_name, previously_selected_item_id, item_names[0]
+        )
+        self.item_menu.set(selected_item_name)
+
+    @staticmethod
+    def _find_name_by_id(id_by_name: dict[str, int], target_id: int | None, default_name: str) -> str:
+        if target_id is None:
+            return default_name
+        for name, id_value in id_by_name.items():
+            if id_value == target_id:
+                return name
+        return default_name
 
     def _on_customer_selected(self, _selected_customer_name: str) -> None:
         self._refresh_selected_customer_history()
@@ -170,14 +191,43 @@ class SalesScreen(customtkinter.CTkFrame):
             return
 
         for row_index, sale in enumerate(previous_sales):
-            formatted_date = sale.sale_date_time.strftime("%d/%m/%Y %H:%M")
-            text = (
-                f"{formatted_date}  •  {len(sale.sold_items)} item(ns)  •  "
-                f"R$ {sale.total_amount:.2f}"
+            self._add_sale_history_row(row_index, sale)
+
+    def _add_sale_history_row(self, row_index: int, sale) -> None:
+        formatted_date = sale.sale_date_time.strftime("%d/%m/%Y %H:%M")
+        text = (
+            f"{formatted_date}  •  {len(sale.sold_items)} item(ns)  •  "
+            f"R$ {sale.total_amount:.2f}"
+        )
+        if sale.is_cancelled:
+            text += "  •  (cancelada)"
+
+        label_options = {"text_color": "gray"} if sale.is_cancelled else {}
+        label = customtkinter.CTkLabel(self.history_panel, text=text, anchor="w", **label_options)
+        label.grid(row=row_index, column=0, sticky="ew", padx=8, pady=4)
+
+        if not sale.is_cancelled:
+            cancel_button = customtkinter.CTkButton(
+                self.history_panel, text="Cancelar", width=80, fg_color="firebrick3", hover_color="firebrick4",
+                command=lambda: self._cancel_sale(sale.id),
             )
-            customtkinter.CTkLabel(self.history_panel, text=text, anchor="w").grid(
-                row=row_index, column=0, sticky="ew", padx=8, pady=4
-            )
+            cancel_button.grid(row=row_index, column=1, padx=8, pady=4)
+
+    def _cancel_sale(self, sale_id: int) -> None:
+        confirmed = messagebox.askyesno(
+            "Cancelar venda", "Tem certeza que deseja cancelar esta venda? Os itens voltam ao estoque."
+        )
+        if not confirmed:
+            return
+
+        try:
+            self.sale_service.cancel_sale(sale_id)
+        except InvalidSaleDataError as error:
+            messagebox.showerror("Não foi possível cancelar", str(error))
+            return
+
+        self.refresh_customer_and_item_options()
+        self._refresh_selected_customer_history()
 
     def _finalize_sale(self) -> None:
         selected_customer_name = self.customer_menu.get()

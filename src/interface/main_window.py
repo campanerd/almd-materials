@@ -32,20 +32,30 @@ class MainWindow(customtkinter.CTk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        tab_view = customtkinter.CTkTabview(self)
-        tab_view.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
+        self.tab_view = customtkinter.CTkTabview(self, command=self._on_tab_changed)
+        self.tab_view.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
 
-        tab_view.add(CUSTOMERS_TAB_NAME)
-        tab_view.add(STOCK_TAB_NAME)
-        tab_view.add(SALES_TAB_NAME)
+        self.tab_view.add(CUSTOMERS_TAB_NAME)
+        self.tab_view.add(STOCK_TAB_NAME)
+        self.tab_view.add(SALES_TAB_NAME)
 
-        customers_screen = CustomersScreen(tab_view.tab(CUSTOMERS_TAB_NAME), customer_service)
-        customers_screen.pack(fill="both", expand=True)
+        self.customers_screen = CustomersScreen(self.tab_view.tab(CUSTOMERS_TAB_NAME), customer_service)
+        self.customers_screen.pack(fill="both", expand=True)
 
-        stock_screen = StockScreen(tab_view.tab(STOCK_TAB_NAME), stock_item_service)
-        stock_screen.pack(fill="both", expand=True)
+        self.stock_screen = StockScreen(self.tab_view.tab(STOCK_TAB_NAME), stock_item_service)
+        self.stock_screen.pack(fill="both", expand=True)
 
-        sales_screen = SalesScreen(
-            tab_view.tab(SALES_TAB_NAME), customer_service, stock_item_service, sale_service
+        self.sales_screen = SalesScreen(
+            self.tab_view.tab(SALES_TAB_NAME), customer_service, stock_item_service, sale_service
         )
-        sales_screen.pack(fill="both", expand=True)
+        self.sales_screen.pack(fill="both", expand=True)
+
+    def _on_tab_changed(self) -> None:
+        selected_tab_name = self.tab_view.get()
+
+        if selected_tab_name == CUSTOMERS_TAB_NAME:
+            self.customers_screen.refresh_customer_list()
+        elif selected_tab_name == STOCK_TAB_NAME:
+            self.stock_screen.refresh_item_list()
+        elif selected_tab_name == SALES_TAB_NAME:
+            self.sales_screen.refresh_customer_and_item_options()

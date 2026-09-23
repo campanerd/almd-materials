@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from src.models.customer import Customer
 from src.models.sale import Sale, SoldItem
 from src.models.stock_item import StockItem
@@ -47,3 +49,15 @@ def test_find_purchase_history_by_customer_orders_most_recent_first(db_connectio
     history = repository.find_purchase_history_by_customer(customer.id)
 
     assert [sale.id for sale in history] == [second_sale.id, first_sale.id]
+
+
+def test_cancel_marks_the_sale_as_cancelled(db_connection):
+    customer, item = _create_customer_and_item(db_connection)
+    repository = SaleRepository(db_connection)
+    sale = repository.save(Sale(customer_id=customer.id, sold_items=[SoldItem(item.id, 1, 30.0)]))
+
+    repository.cancel(sale.id, datetime.now())
+
+    cancelled_sale = repository.find_by_id(sale.id)
+    assert cancelled_sale.is_cancelled
+    assert cancelled_sale.cancelled_at is not None
