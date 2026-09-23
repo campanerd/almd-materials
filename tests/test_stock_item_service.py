@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
+from src.models.customer import Customer
+from src.repositories.customer_repository import CustomerRepository
+from src.repositories.sale_repository import SaleRepository
 from src.repositories.stock_item_repository import StockItemRepository
+from src.services.sale_service import ItemToSell, SaleService
 from src.services.stock_item_service import InvalidStockItemDataError, StockItemService
 
 
@@ -59,3 +63,32 @@ def test_register_item_rejects_an_image_path_that_does_not_exist(stock_item_serv
         stock_item_service.register_item(
             "Cimento", "Saco 50kg", 10, 32.5, original_image_path=str(missing_image)
         )
+
+
+def test_update_item_persists_the_new_data(stock_item_service):
+    item = stock_item_service.register_item("Cimento", "Saco 50kg", 10, 32.5)
+
+    item.unit_price = 40.0
+    stock_item_service.update_item(item)
+
+    assert stock_item_service.find_item_by_id(item.id).unit_price == 40.0
+
+
+def test_delete_item_removes_the_item(stock_item_service):
+    item = stock_item_service.register_item("Cimento", "Saco 50kg", 10, 32.5)
+
+    stock_item_service.delete_item(item.id)
+
+    assert stock_item_service.find_item_by_id(item.id) is None
+
+
+def test_delete_item_rejects_when_item_has_been_sold(db_connection, stock_item_service):
+    item = stock_item_service.register_item("Cimento", "Saco 50kg", 10, 32.5)
+    customer = CustomerRepository(db_connection).save(
+        Customer(full_name="Marcos", address="Rua M", phone_number="11977776666")
+    )
+    sale_service = SaleService(SaleRepository(db_connection), StockItemRepository(db_connection))
+    sale_service.register_sale(customer.id, [ItemToSell(item.id, 1)])
+
+    with pytest.raises(InvalidStockItemDataError):
+        stock_item_service.delete_item(item.id)

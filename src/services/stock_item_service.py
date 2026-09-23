@@ -1,4 +1,5 @@
 import shutil
+import sqlite3
 import uuid
 from pathlib import Path
 
@@ -38,7 +39,7 @@ class StockItemService:
 
         saved_image_path = None
         if original_image_path:
-            saved_image_path = self._copy_image_to_data_folder(original_image_path)
+            saved_image_path = self.copy_image_to_data_folder(original_image_path)
 
         item = StockItem(
             name=name,
@@ -63,9 +64,14 @@ class StockItemService:
         return self.stock_item_repository.find_by_partial_name(name_fragment)
 
     def delete_item(self, id: int) -> None:
-        self.stock_item_repository.delete(id)
+        try:
+            self.stock_item_repository.delete(id)
+        except sqlite3.IntegrityError as error:
+            raise InvalidStockItemDataError(
+                "Não é possível excluir um item que já foi vendido."
+            ) from error
 
-    def _copy_image_to_data_folder(self, original_image_path: str) -> str:
+    def copy_image_to_data_folder(self, original_image_path: str) -> str:
         original_path = Path(original_image_path)
         if not original_path.is_file():
             raise InvalidStockItemDataError("A imagem escolhida não foi encontrada.")
