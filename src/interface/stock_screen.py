@@ -84,7 +84,11 @@ class StockScreen(customtkinter.CTkFrame):
         try:
             quantity = int(self.quantity_field.get() or 0)
             price = float((self.price_field.get() or "0").replace(",", "."))
+        except ValueError:
+            self.message_label.configure(text="Quantidade e preço devem ser números válidos.")
+            return
 
+        try:
             if self.item_id_being_edited is None:
                 self.stock_item_service.register_item(
                     name=self.name_field.get(),
@@ -108,8 +112,8 @@ class StockScreen(customtkinter.CTkFrame):
                         image_path=image_path,
                     )
                 )
-        except (InvalidStockItemDataError, ValueError) as error:
-            self.message_label.configure(text=str(error) or "Verifique os valores de quantidade e preço.")
+        except InvalidStockItemDataError as error:
+            self.message_label.configure(text=str(error))
             return
 
         self._cancel_edit()
