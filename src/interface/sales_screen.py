@@ -76,6 +76,7 @@ class SalesScreen(customtkinter.CTkFrame):
         self.cart_panel = customtkinter.CTkScrollableFrame(self, label_text="Itens desta venda")
         self.cart_panel.grid(row=2, column=0, sticky="nsew", padx=(16, 8), pady=(8, 8))
         self.cart_panel.grid_columnconfigure(0, weight=1)
+        self.cart_panel.grid_columnconfigure(1, weight=0)
 
         self.history_panel = customtkinter.CTkScrollableFrame(self, label_text="Histórico de compras do cliente")
         self.history_panel.grid(row=2, column=1, sticky="nsew", padx=(8, 16), pady=(8, 8))
@@ -147,6 +148,19 @@ class SalesScreen(customtkinter.CTkFrame):
             self.message_label.configure(text="Informe uma quantidade válida.")
             return
 
+        stock_item = self.stock_item_service.find_item_by_id(item_id)
+        already_in_cart = sum(
+            item.desired_quantity for item in self.current_cart_items if item.stock_item_id == item_id
+        )
+        if stock_item is not None and already_in_cart + quantity > stock_item.quantity_in_stock:
+            self.message_label.configure(
+                text=(
+                    f"Estoque insuficiente para '{stock_item.name}'. "
+                    f"Disponível: {stock_item.quantity_in_stock}, já na venda: {already_in_cart}."
+                )
+            )
+            return
+
         self.message_label.configure(text="")
         self.current_cart_items.append(ItemToSell(stock_item_id=item_id, desired_quantity=quantity))
         self.quantity_field.delete(0, "end")
@@ -172,7 +186,18 @@ class SalesScreen(customtkinter.CTkFrame):
                 row=row_index, column=0, sticky="ew", padx=8, pady=4
             )
 
+            remove_button = customtkinter.CTkButton(
+                self.cart_panel, text="Remover", width=80, fg_color="firebrick3", hover_color="firebrick4",
+                command=lambda index=row_index: self._remove_item_from_cart(index),
+            )
+            remove_button.grid(row=row_index, column=1, padx=8, pady=4)
+
         self.total_label.configure(text=f"Total: R$ {sale_total:.2f}")
+
+    def _remove_item_from_cart(self, index: int) -> None:
+        del self.current_cart_items[index]
+        self.message_label.configure(text="")
+        self._refresh_cart_display()
 
     def _refresh_selected_customer_history(self) -> None:
         for widget in self.history_panel.winfo_children():
