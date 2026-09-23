@@ -1,4 +1,5 @@
 import re
+import sqlite3
 
 from src.models.customer import Customer
 from src.repositories.customer_repository import CustomerRepository
@@ -41,7 +42,12 @@ class CustomerService:
         return self.customer_repository.find_by_partial_name(name_fragment)
 
     def delete_customer(self, id: int) -> None:
-        self.customer_repository.delete(id)
+        try:
+            self.customer_repository.delete(id)
+        except sqlite3.IntegrityError as error:
+            raise InvalidCustomerDataError(
+                "Não é possível excluir um cliente que já tem compras registradas."
+            ) from error
 
     @classmethod
     def _validate_customer_data(cls, full_name: str, address: str, phone_number: str) -> None:

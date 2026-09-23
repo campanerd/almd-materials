@@ -1,7 +1,11 @@
 import pytest
 
+from src.models.stock_item import StockItem
 from src.repositories.customer_repository import CustomerRepository
+from src.repositories.sale_repository import SaleRepository
+from src.repositories.stock_item_repository import StockItemRepository
 from src.services.customer_service import CustomerService, InvalidCustomerDataError
+from src.services.sale_service import ItemToSell, SaleService
 
 
 @pytest.fixture
@@ -57,3 +61,33 @@ def test_register_customer_rejects_name_longer_than_the_limit(customer_service):
 def test_register_customer_rejects_address_longer_than_the_limit(customer_service):
     with pytest.raises(InvalidCustomerDataError):
         customer_service.register_customer("Marcos", "R" * 201, "11977776666")
+
+
+def test_update_customer_persists_the_new_data(customer_service):
+    customer = customer_service.register_customer("Marcos", "Rua Antiga", "11977776666")
+
+    customer.address = "Rua Nova"
+    customer_service.update_customer(customer)
+
+    assert customer_service.find_customer_by_id(customer.id).address == "Rua Nova"
+
+
+def test_delete_customer_removes_the_customer(customer_service):
+    customer = customer_service.register_customer("Marcos", "Rua M", "11977776666")
+
+    customer_service.delete_customer(customer.id)
+
+    assert customer_service.find_customer_by_id(customer.id) is None
+
+
+def test_delete_customer_rejects_when_customer_has_purchase_history(db_connection, customer_service):
+    customer = customer_service.register_customer("Marcos", "Rua M", "11977776666")
+    stock_item_repository = StockItemRepository(db_connection)
+    item = stock_item_repository.save(
+        StockItem(name="Cimento", description="", quantity_in_stock=10, unit_price=30.0)
+    )
+    sale_service = SaleService(SaleRepository(db_connection), stock_item_repository)
+    sale_service.register_sale(customer.id, [ItemToSell(item.id, 1)])
+
+    with pytest.raises(InvalidCustomerDataError):
+        customer_service.delete_customer(customer.id)
