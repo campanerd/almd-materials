@@ -6,6 +6,8 @@ from src.models.stock_item import StockItem
 from src.repositories.stock_item_repository import StockItemRepository
 
 DEFAULT_IMAGES_FOLDER = Path(__file__).parent.parent.parent / "data" / "item_images"
+MAX_NAME_LENGTH = 120
+MAX_DESCRIPTION_LENGTH = 300
 
 
 class InvalidStockItemDataError(Exception):
@@ -32,7 +34,7 @@ class StockItemService:
         name = name.strip()
         description = description.strip()
 
-        self._validate_item_data(name, quantity_in_stock, unit_price)
+        self._validate_item_data(name, description, quantity_in_stock, unit_price)
 
         saved_image_path = None
         if original_image_path:
@@ -48,7 +50,7 @@ class StockItemService:
         return self.stock_item_repository.save(item)
 
     def update_item(self, item: StockItem) -> None:
-        self._validate_item_data(item.name, item.quantity_in_stock, item.unit_price)
+        self._validate_item_data(item.name, item.description, item.quantity_in_stock, item.unit_price)
         self.stock_item_repository.update(item)
 
     def find_item_by_id(self, id: int) -> StockItem | None:
@@ -65,18 +67,31 @@ class StockItemService:
 
     def _copy_image_to_data_folder(self, original_image_path: str) -> str:
         original_path = Path(original_image_path)
+        if not original_path.is_file():
+            raise InvalidStockItemDataError("A imagem escolhida não foi encontrada.")
+
         self.images_folder.mkdir(parents=True, exist_ok=True)
 
         unique_file_name = f"{uuid.uuid4().hex}{original_path.suffix}"
         destination_path = self.images_folder / unique_file_name
 
-        shutil.copyfile(original_path, destination_path)
+        try:
+            shutil.copyfile(original_path, destination_path)
+        except OSError as error:
+            raise InvalidStockItemDataError("Não foi possível carregar a imagem escolhida.") from error
+
         return str(destination_path)
 
     @staticmethod
-    def _validate_item_data(name: str, quantity_in_stock: int, unit_price: float) -> None:
+    def _validate_item_data(name: str, description: str, quantity_in_stock: int, unit_price: float) -> None:
         if not name:
             raise InvalidStockItemDataError("O nome do item é obrigatório.")
+        if len(name) > MAX_NAME_LENGTH:
+            raise InvalidStockItemDataError(f"O nome do item não pode ter mais que {MAX_NAME_LENGTH} caracteres.")
+        if len(description) > MAX_DESCRIPTION_LENGTH:
+            raise InvalidStockItemDataError(
+                f"A descrição não pode ter mais que {MAX_DESCRIPTION_LENGTH} caracteres."
+            )
         if quantity_in_stock < 0:
             raise InvalidStockItemDataError("A quantidade em estoque não pode ser negativa.")
         if unit_price < 0:

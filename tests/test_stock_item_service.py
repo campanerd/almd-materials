@@ -40,3 +40,22 @@ def test_register_item_rejects_negative_quantity(stock_item_service):
 def test_register_item_rejects_negative_price(stock_item_service):
     with pytest.raises(InvalidStockItemDataError):
         stock_item_service.register_item("Cimento", "Saco 50kg", 10, -1)
+
+
+def test_register_item_rejects_name_longer_than_the_limit(stock_item_service):
+    with pytest.raises(InvalidStockItemDataError):
+        stock_item_service.register_item("C" * 121, "Saco 50kg", 10, 32.5)
+
+
+def test_register_item_rejects_description_longer_than_the_limit(stock_item_service):
+    with pytest.raises(InvalidStockItemDataError):
+        stock_item_service.register_item("Cimento", "D" * 301, 10, 32.5)
+
+
+def test_register_item_rejects_an_image_path_that_does_not_exist(stock_item_service, tmp_path):
+    missing_image = tmp_path / "does_not_exist.png"
+
+    with pytest.raises(InvalidStockItemDataError):
+        stock_item_service.register_item(
+            "Cimento", "Saco 50kg", 10, 32.5, original_image_path=str(missing_image)
+        )
