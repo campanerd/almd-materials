@@ -1,5 +1,12 @@
+import re
+
 from src.models.customer import Customer
 from src.repositories.customer_repository import CustomerRepository
+
+MAX_FULL_NAME_LENGTH = 120
+MAX_ADDRESS_LENGTH = 200
+MIN_PHONE_DIGITS = 8
+MAX_PHONE_DIGITS = 11
 
 
 class InvalidCustomerDataError(Exception):
@@ -36,11 +43,28 @@ class CustomerService:
     def delete_customer(self, id: int) -> None:
         self.customer_repository.delete(id)
 
-    @staticmethod
-    def _validate_customer_data(full_name: str, address: str, phone_number: str) -> None:
+    @classmethod
+    def _validate_customer_data(cls, full_name: str, address: str, phone_number: str) -> None:
         if not full_name:
             raise InvalidCustomerDataError("O nome do cliente é obrigatório.")
+        if len(full_name) > MAX_FULL_NAME_LENGTH:
+            raise InvalidCustomerDataError(
+                f"O nome do cliente não pode ter mais que {MAX_FULL_NAME_LENGTH} caracteres."
+            )
         if not address:
             raise InvalidCustomerDataError("O endereço do cliente é obrigatório.")
+        if len(address) > MAX_ADDRESS_LENGTH:
+            raise InvalidCustomerDataError(
+                f"O endereço não pode ter mais que {MAX_ADDRESS_LENGTH} caracteres."
+            )
         if not phone_number:
             raise InvalidCustomerDataError("O telefone do cliente é obrigatório.")
+        cls._validate_phone_number(phone_number)
+
+    @staticmethod
+    def _validate_phone_number(phone_number: str) -> None:
+        digits_only = re.sub(r"\D", "", phone_number)
+        if not (MIN_PHONE_DIGITS <= len(digits_only) <= MAX_PHONE_DIGITS):
+            raise InvalidCustomerDataError(
+                f"Telefone inválido. Informe entre {MIN_PHONE_DIGITS} e {MAX_PHONE_DIGITS} dígitos."
+            )
