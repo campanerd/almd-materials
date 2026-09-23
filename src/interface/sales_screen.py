@@ -1,18 +1,94 @@
-from tkinter import messagebox
-
 import customtkinter
 
+from src.interface import theme
+from src.interface.components import (
+    DataRow,
+    EmptyState,
+    SectionCard,
+    animate_rows_entrance,
+    build_danger_button,
+    build_field,
+    build_list_header,
+    build_primary_button,
+)
+from src.interface.dialogs import ask_confirmation, show_error
+from src.models.sale import Sale
 from src.services.customer_service import CustomerService
-from src.services.stock_item_service import StockItemService
 from src.services.sale_service import (
     InsufficientStockError,
     InvalidSaleDataError,
     ItemToSell,
     SaleService,
 )
+from src.services.stock_item_service import StockItemService
 
 NO_CUSTOMER_SELECTED = "Selecione um cliente"
 NO_ITEM_SELECTED = "Selecione um item"
+SELECTION_HINT = "Escolha o cliente e o item, informe a quantidade e adicione à venda."
+
+CART_COLUMN_WEIGHTS = [(5, 90), (0, 44), (2, 84), (0, 74)]
+CART_COLUMN_TITLES = ["Item", "Qtd.", "Subtotal", ""]
+
+HISTORY_COLUMN_WEIGHTS = [(4, 118), (2, 58), (3, 92), (0, 72)]
+HISTORY_COLUMN_TITLES = ["Data", "Itens", "Total", ""]
+
+CELL_PADDING = (0, 8)
+
+
+def format_amount_in_brazilian_currency(amount: float) -> str:
+    """Python groups thousands with the comma and Brazil with the dot, so the two
+    separators are swapped through a placeholder that neither of them uses."""
+    grouped_amount = f"{amount:,.2f}"
+    return "R$ " + grouped_amount.replace(",", "|").replace(".", ",").replace("|", ".")
+
+
+def _build_section_title(master, text: str) -> customtkinter.CTkLabel:
+    return customtkinter.CTkLabel(
+        master,
+        text=text,
+        font=theme.font("section"),
+        text_color=theme.TEXT_PRIMARY,
+        anchor="w",
+    )
+
+
+def _build_labelled_control_container(master, label_text: str) -> customtkinter.CTkFrame:
+    """build_field covers entries only, and the option menus need the same label
+    treatment so the whole selection row lines up."""
+    container = customtkinter.CTkFrame(master, fg_color="transparent")
+    container.grid_columnconfigure(0, weight=1)
+
+    customtkinter.CTkLabel(
+        container,
+        text=label_text.upper(),
+        font=theme.font("overline"),
+        text_color=theme.TEXT_MUTED,
+        anchor="w",
+    ).grid(row=0, column=0, sticky="ew", pady=(0, 5))
+
+    return container
+
+
+def _build_option_menu(master, values: list[str], command=None) -> customtkinter.CTkOptionMenu:
+    return customtkinter.CTkOptionMenu(
+        master,
+        values=values,
+        command=command,
+        height=38,
+        corner_radius=theme.CONTROL_RADIUS,
+        fg_color=theme.ENTRY_FILL,
+        button_color=theme.ACCENT,
+        button_hover_color=theme.ACCENT_HOVER,
+        text_color=theme.TEXT_PRIMARY,
+        dropdown_fg_color=theme.BG_ELEVATED,
+        dropdown_hover_color=theme.ROW_HOVER,
+        dropdown_text_color=theme.TEXT_PRIMARY,
+        font=theme.font("body"),
+        dropdown_font=theme.font("body"),
+        # Otherwise the menu grows to the longest item label and drags the whole
+        # selection row wider whenever a long product name is registered.
+        dynamic_resizing=False,
+    )
 
 
 class SalesScreen(customtkinter.CTkFrame):
@@ -32,68 +108,126 @@ class SalesScreen(customtkinter.CTkFrame):
         self.item_id_by_name: dict[str, int] = {}
         self.current_cart_items: list[ItemToSell] = []
 
-        self.grid_columnconfigure((0, 1), weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_columnconfigure((0, 1), weight=1, uniform="sales_columns")
+        self.grid_rowconfigure(1, weight=1)
 
-        self._build_customer_selection()
-        self._build_item_addition()
-        self._build_cart_and_history()
+        self._build_selection_card()
+        self._build_cart_card()
+        self._build_history_card()
 
+        self._refresh_cart_display()
         self.refresh_customer_and_item_options()
 
-    def _build_customer_selection(self) -> None:
-        panel = customtkinter.CTkFrame(self, corner_radius=12)
-        panel.grid(row=0, column=0, columnspan=2, sticky="ew", padx=16, pady=(16, 8))
-        panel.grid_columnconfigure(1, weight=1)
+    def _build_selection_card(self) -> None:
+        card = SectionCard(self)
+        card.grid(row=0, column=0, columnspan=2, sticky="ew")
+        card.grid_columnconfigure((0, 1), weight=1)
 
-        customtkinter.CTkLabel(panel, text="Cliente:").grid(row=0, column=0, padx=8, pady=8)
-
-        self.customer_menu = customtkinter.CTkOptionMenu(
-            panel, values=[NO_CUSTOMER_SELECTED], command=self._on_customer_selected
+        _build_section_title(card, "Nova venda").grid(
+            row=0, column=0, columnspan=3, sticky="ew", padx=20, pady=(18, 14)
         )
-        self.customer_menu.grid(row=0, column=1, sticky="ew", padx=8, pady=8)
 
-    def _build_item_addition(self) -> None:
-        panel = customtkinter.CTkFrame(self, corner_radius=12)
-        panel.grid(row=1, column=0, columnspan=2, sticky="ew", padx=16, pady=8)
-        panel.grid_columnconfigure(0, weight=1)
-
-        self.item_menu = customtkinter.CTkOptionMenu(panel, values=[NO_ITEM_SELECTED])
-        self.item_menu.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
-
-        self.quantity_field = customtkinter.CTkEntry(panel, placeholder_text="Quantidade", width=100)
-        self.quantity_field.grid(row=0, column=1, padx=8, pady=8)
-
-        add_button = customtkinter.CTkButton(
-            panel, text="Adicionar à venda", command=self._add_item_to_cart
+        customer_container = _build_labelled_control_container(card, "Cliente")
+        customer_container.grid(row=1, column=0, sticky="ew", padx=(20, 8))
+        self.customer_menu = _build_option_menu(
+            customer_container, [NO_CUSTOMER_SELECTED], self._on_customer_selected
         )
-        add_button.grid(row=0, column=2, padx=8, pady=8)
+        self.customer_menu.grid(row=1, column=0, sticky="ew")
 
-        self.message_label = customtkinter.CTkLabel(panel, text="", text_color="tomato")
-        self.message_label.grid(row=1, column=0, columnspan=3, sticky="w", padx=8)
+        item_container = _build_labelled_control_container(card, "Item do estoque")
+        item_container.grid(row=1, column=1, sticky="ew", padx=8)
+        self.item_menu = _build_option_menu(item_container, [NO_ITEM_SELECTED])
+        self.item_menu.grid(row=1, column=0, sticky="ew")
 
-    def _build_cart_and_history(self) -> None:
-        self.cart_panel = customtkinter.CTkScrollableFrame(self, label_text="Itens desta venda")
-        self.cart_panel.grid(row=2, column=0, sticky="nsew", padx=(16, 8), pady=(8, 8))
-        self.cart_panel.grid_columnconfigure(0, weight=1)
-        self.cart_panel.grid_columnconfigure(1, weight=0)
-
-        self.history_panel = customtkinter.CTkScrollableFrame(self, label_text="Histórico de compras do cliente")
-        self.history_panel.grid(row=2, column=1, sticky="nsew", padx=(8, 16), pady=(8, 8))
-        self.history_panel.grid_columnconfigure(0, weight=1)
-        self.history_panel.grid_columnconfigure(1, weight=0)
-
-        bottom_panel = customtkinter.CTkFrame(self, fg_color="transparent")
-        bottom_panel.grid(row=3, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 16))
-        bottom_panel.grid_columnconfigure(0, weight=1)
-
-        self.total_label = customtkinter.CTkLabel(bottom_panel, text="Total: R$ 0,00", font=("", 16, "bold"))
-        self.total_label.grid(row=0, column=0, sticky="w")
-
-        finalize_button = customtkinter.CTkButton(
-            bottom_panel, text="Finalizar venda", command=self._finalize_sale
+        quantity_container, self.quantity_field = build_field(
+            card, "Quantidade", "Ex.: 3", width=130
         )
-        finalize_button.grid(row=0, column=1, sticky="e")
+        quantity_container.grid(row=1, column=2, sticky="ew", padx=(8, 20))
+
+        self.message_label = customtkinter.CTkLabel(
+            card,
+            text=SELECTION_HINT,
+            font=theme.font("caption"),
+            text_color=theme.TEXT_MUTED,
+            anchor="w",
+        )
+        self.message_label.grid(row=2, column=0, columnspan=2, sticky="ew", padx=20, pady=(14, 18))
+
+        add_button = build_primary_button(card, "Adicionar à venda", self._add_item_to_cart)
+        add_button.grid(row=2, column=2, sticky="e", padx=(8, 20), pady=(14, 18))
+
+    def _build_cart_card(self) -> None:
+        card = SectionCard(self)
+        card.grid(row=1, column=0, sticky="nsew", padx=(0, 9), pady=(18, 0))
+        card.grid_columnconfigure(0, weight=1)
+        card.grid_rowconfigure(1, weight=1)
+
+        _build_section_title(card, "Itens desta venda").grid(
+            row=0, column=0, sticky="ew", padx=20, pady=(18, 10)
+        )
+
+        self.cart_list_panel = customtkinter.CTkScrollableFrame(
+            card,
+            fg_color=theme.BG_CANVAS,
+            corner_radius=10,
+            scrollbar_button_color=theme.SWITCH_TRACK,
+            scrollbar_button_hover_color=theme.ACCENT_FG,
+        )
+        self.cart_list_panel.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        self.cart_list_panel.grid_columnconfigure(0, weight=1)
+
+        self._build_checkout_bar(card)
+
+    def _build_checkout_bar(self, card: SectionCard) -> None:
+        customtkinter.CTkFrame(card, height=1, fg_color=theme.DIVIDER).grid(
+            row=2, column=0, sticky="ew", padx=10
+        )
+
+        checkout_bar = customtkinter.CTkFrame(
+            card, fg_color=theme.BG_ELEVATED, corner_radius=theme.CONTROL_RADIUS
+        )
+        checkout_bar.grid(row=3, column=0, sticky="ew", padx=10, pady=10)
+        checkout_bar.grid_columnconfigure(0, weight=1)
+
+        self.total_label = customtkinter.CTkLabel(
+            checkout_bar,
+            text=f"Total: {format_amount_in_brazilian_currency(0.0)}",
+            font=theme.font("total"),
+            text_color=theme.TEXT_PRIMARY,
+            anchor="w",
+        )
+        self.total_label.grid(row=0, column=0, sticky="ew", padx=16, pady=(14, 10))
+
+        finalize_button = build_primary_button(checkout_bar, "Finalizar venda", self._finalize_sale)
+        finalize_button.configure(height=44)
+        finalize_button.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 16))
+
+    def _build_history_card(self) -> None:
+        card = SectionCard(self)
+        card.grid(row=1, column=1, sticky="nsew", padx=(9, 0), pady=(18, 0))
+        card.grid_columnconfigure(0, weight=1)
+        card.grid_rowconfigure(1, weight=1)
+
+        _build_section_title(card, "Histórico de compras do cliente").grid(
+            row=0, column=0, sticky="ew", padx=20, pady=(18, 10)
+        )
+
+        self.history_list_panel = customtkinter.CTkScrollableFrame(
+            card,
+            fg_color=theme.BG_CANVAS,
+            corner_radius=10,
+            scrollbar_button_color=theme.SWITCH_TRACK,
+            scrollbar_button_hover_color=theme.ACCENT_FG,
+        )
+        self.history_list_panel.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        self.history_list_panel.grid_columnconfigure(0, weight=1)
+
+    def _show_message(self, message: str, is_error: bool) -> None:
+        """The strip always carries text so the card never changes height."""
+        self.message_label.configure(
+            text=message or SELECTION_HINT,
+            text_color=theme.DANGER if is_error else theme.TEXT_MUTED,
+        )
 
     def refresh_customer_and_item_options(self) -> None:
         previously_selected_customer_id = self.customer_id_by_name.get(self.customer_menu.get())
@@ -122,6 +256,8 @@ class SalesScreen(customtkinter.CTkFrame):
 
     @staticmethod
     def _find_name_by_id(id_by_name: dict[str, int], target_id: int | None, default_name: str) -> str:
+        """The selection is restored by id: the item label carries the live stock, so it
+        changes on every sale and a match by label text would silently reset the menu."""
         if target_id is None:
             return default_name
         for name, id_value in id_by_name.items():
@@ -137,7 +273,7 @@ class SalesScreen(customtkinter.CTkFrame):
         item_id = self.item_id_by_name.get(selected_item_name)
 
         if item_id is None:
-            self.message_label.configure(text="Cadastre ao menos um item em estoque antes de vender.")
+            self._show_message("Cadastre ao menos um item em estoque antes de vender.", is_error=True)
             return
 
         try:
@@ -145,102 +281,199 @@ class SalesScreen(customtkinter.CTkFrame):
             if quantity <= 0:
                 raise ValueError
         except ValueError:
-            self.message_label.configure(text="Informe uma quantidade válida.")
+            self._show_message("Informe uma quantidade válida.", is_error=True)
             return
 
         stock_item = self.stock_item_service.find_item_by_id(item_id)
+        # The lines already in the cart count against the stock too, otherwise the same
+        # item could be added twice and only fail when the sale is finalized.
         already_in_cart = sum(
             item.desired_quantity for item in self.current_cart_items if item.stock_item_id == item_id
         )
         if stock_item is not None and already_in_cart + quantity > stock_item.quantity_in_stock:
-            self.message_label.configure(
-                text=(
-                    f"Estoque insuficiente para '{stock_item.name}'. "
-                    f"Disponível: {stock_item.quantity_in_stock}, já na venda: {already_in_cart}."
-                )
+            self._show_message(
+                f"Estoque insuficiente para '{stock_item.name}'. "
+                f"Disponível: {stock_item.quantity_in_stock}, já na venda: {already_in_cart}.",
+                is_error=True,
             )
             return
 
-        self.message_label.configure(text="")
+        self._show_message("", is_error=False)
         self.current_cart_items.append(ItemToSell(stock_item_id=item_id, desired_quantity=quantity))
         self.quantity_field.delete(0, "end")
         self._refresh_cart_display()
 
     def _refresh_cart_display(self) -> None:
-        for widget in self.cart_panel.winfo_children():
+        for widget in self.cart_list_panel.winfo_children():
             widget.destroy()
+
+        if not self.current_cart_items:
+            self.total_label.configure(text=f"Total: {format_amount_in_brazilian_currency(0.0)}")
+            EmptyState(
+                self.cart_list_panel,
+                "Nenhum item nesta venda ainda.",
+                "Escolha um item acima e informe a quantidade.",
+            ).grid(row=0, column=0, sticky="ew")
+            return
+
+        build_list_header(self.cart_list_panel, CART_COLUMN_WEIGHTS, CART_COLUMN_TITLES).grid(
+            row=0, column=0, sticky="ew", pady=(0, 4)
+        )
 
         item_name_by_id = {item_id: name for name, item_id in self.item_id_by_name.items()}
         stock_items_by_id = {item.id: item for item in self.stock_item_service.list_all_items()}
 
         sale_total = 0.0
+        rows = []
         for row_index, item_to_sell in enumerate(self.current_cart_items):
             stock_item = stock_items_by_id.get(item_to_sell.stock_item_id)
             unit_price = stock_item.unit_price if stock_item else 0.0
             subtotal = unit_price * item_to_sell.desired_quantity
             sale_total += subtotal
 
-            item_name = item_name_by_id.get(item_to_sell.stock_item_id, "Item")
-            text = f"{item_name}  x{item_to_sell.desired_quantity}  =  R$ {subtotal:.2f}"
-            customtkinter.CTkLabel(self.cart_panel, text=text, anchor="w").grid(
-                row=row_index, column=0, sticky="ew", padx=8, pady=4
+            rows.append(
+                self._build_cart_row(
+                    row_index,
+                    item_name_by_id.get(item_to_sell.stock_item_id, "Item"),
+                    item_to_sell.desired_quantity,
+                    subtotal,
+                    # The default argument freezes this line's index at build time: a bare
+                    # closure over row_index would make every button remove the last line.
+                    lambda index=row_index: self._remove_item_from_cart(index),
+                )
             )
 
-            remove_button = customtkinter.CTkButton(
-                self.cart_panel, text="Remover", width=80, fg_color="firebrick3", hover_color="firebrick4",
-                command=lambda index=row_index: self._remove_item_from_cart(index),
-            )
-            remove_button.grid(row=row_index, column=1, padx=8, pady=4)
+        animate_rows_entrance(rows)
+        self.total_label.configure(text=f"Total: {format_amount_in_brazilian_currency(sale_total)}")
 
-        self.total_label.configure(text=f"Total: R$ {sale_total:.2f}")
+    def _build_cart_row(
+        self, row_index: int, item_name: str, quantity: int, subtotal: float, remove_command
+    ) -> DataRow:
+        row = DataRow(self.cart_list_panel, CART_COLUMN_WEIGHTS, on_activate=None)
+        row.grid(row=row_index + 1, column=0, sticky="ew", pady=2)
+
+        customtkinter.CTkLabel(
+            row,
+            text=item_name,
+            font=theme.font("body_strong"),
+            text_color=theme.TEXT_PRIMARY,
+            anchor="w",
+        ).grid(row=0, column=1, sticky="ew", padx=CELL_PADDING)
+
+        customtkinter.CTkLabel(
+            row,
+            text=f"x{quantity}",
+            font=theme.font("numeric"),
+            text_color=theme.TEXT_SECONDARY,
+            anchor="w",
+        ).grid(row=0, column=2, sticky="ew", padx=CELL_PADDING)
+
+        customtkinter.CTkLabel(
+            row,
+            text=format_amount_in_brazilian_currency(subtotal),
+            font=theme.font("numeric_strong"),
+            text_color=theme.TEXT_PRIMARY,
+            anchor="w",
+        ).grid(row=0, column=3, sticky="ew", padx=CELL_PADDING)
+
+        build_danger_button(row, "Remover", remove_command, width=74).grid(
+            row=0, column=4, padx=CELL_PADDING
+        )
+
+        row.finish_setup()
+        return row
 
     def _remove_item_from_cart(self, index: int) -> None:
         del self.current_cart_items[index]
-        self.message_label.configure(text="")
+        self._show_message("", is_error=False)
         self._refresh_cart_display()
 
     def _refresh_selected_customer_history(self) -> None:
-        for widget in self.history_panel.winfo_children():
+        for widget in self.history_list_panel.winfo_children():
             widget.destroy()
 
         selected_customer_name = self.customer_menu.get()
         customer_id = self.customer_id_by_name.get(selected_customer_name)
         if customer_id is None:
+            EmptyState(
+                self.history_list_panel,
+                "Nenhum cliente selecionado.",
+                "Cadastre um cliente para registrar uma venda.",
+            ).grid(row=0, column=0, sticky="ew")
             return
 
         previous_sales = self.sale_service.list_purchase_history_by_customer(customer_id)
         if not previous_sales:
-            customtkinter.CTkLabel(self.history_panel, text="Nenhuma compra registrada ainda.").grid(
-                row=0, column=0, sticky="w", padx=8, pady=8
-            )
+            EmptyState(
+                self.history_list_panel,
+                "Nenhuma compra registrada ainda.",
+                "As vendas finalizadas para este cliente aparecem aqui.",
+            ).grid(row=0, column=0, sticky="ew")
             return
 
-        for row_index, sale in enumerate(previous_sales):
-            self._add_sale_history_row(row_index, sale)
-
-    def _add_sale_history_row(self, row_index: int, sale) -> None:
-        formatted_date = sale.sale_date_time.strftime("%d/%m/%Y %H:%M")
-        text = (
-            f"{formatted_date}  •  {len(sale.sold_items)} item(ns)  •  "
-            f"R$ {sale.total_amount:.2f}"
+        build_list_header(self.history_list_panel, HISTORY_COLUMN_WEIGHTS, HISTORY_COLUMN_TITLES).grid(
+            row=0, column=0, sticky="ew", pady=(0, 4)
         )
+
+        rows = [
+            self._build_sale_history_row(row_index, sale)
+            for row_index, sale in enumerate(previous_sales)
+        ]
+        animate_rows_entrance(rows)
+
+    def _build_sale_history_row(self, row_index: int, sale: Sale) -> DataRow:
+        row = DataRow(self.history_list_panel, HISTORY_COLUMN_WEIGHTS, on_activate=None)
+        row.grid(row=row_index + 1, column=0, sticky="ew", pady=2)
+
+        date_text_color = theme.TEXT_MUTED if sale.is_cancelled else theme.TEXT_PRIMARY
+        detail_text_color = theme.TEXT_MUTED if sale.is_cancelled else theme.TEXT_SECONDARY
+
+        customtkinter.CTkLabel(
+            row,
+            text=sale.sale_date_time.strftime("%d/%m/%Y %H:%M"),
+            font=theme.font("numeric"),
+            text_color=date_text_color,
+            anchor="w",
+        ).grid(row=0, column=1, sticky="ew", padx=CELL_PADDING)
+
+        customtkinter.CTkLabel(
+            row,
+            text=f"{len(sale.sold_items)} item(ns)",
+            font=theme.font("body"),
+            text_color=detail_text_color,
+            anchor="w",
+        ).grid(row=0, column=2, sticky="ew", padx=CELL_PADDING)
+
+        customtkinter.CTkLabel(
+            row,
+            text=format_amount_in_brazilian_currency(sale.total_amount),
+            font=theme.font("numeric_strong"),
+            text_color=date_text_color,
+            anchor="w",
+        ).grid(row=0, column=3, sticky="ew", padx=CELL_PADDING)
+
         if sale.is_cancelled:
-            text += "  •  (cancelada)"
+            customtkinter.CTkLabel(
+                row,
+                text="(cancelada)",
+                font=theme.font("caption"),
+                text_color=theme.TEXT_MUTED,
+                anchor="w",
+            ).grid(row=0, column=4, sticky="ew", padx=CELL_PADDING)
+        else:
+            build_danger_button(
+                row, "Cancelar", lambda: self._cancel_sale(sale.id), width=72
+            ).grid(row=0, column=4, padx=CELL_PADDING)
 
-        label_options = {"text_color": "gray"} if sale.is_cancelled else {}
-        label = customtkinter.CTkLabel(self.history_panel, text=text, anchor="w", **label_options)
-        label.grid(row=row_index, column=0, sticky="ew", padx=8, pady=4)
-
-        if not sale.is_cancelled:
-            cancel_button = customtkinter.CTkButton(
-                self.history_panel, text="Cancelar", width=80, fg_color="firebrick3", hover_color="firebrick4",
-                command=lambda: self._cancel_sale(sale.id),
-            )
-            cancel_button.grid(row=row_index, column=1, padx=8, pady=4)
+        row.finish_setup()
+        return row
 
     def _cancel_sale(self, sale_id: int) -> None:
-        confirmed = messagebox.askyesno(
-            "Cancelar venda", "Tem certeza que deseja cancelar esta venda? Os itens voltam ao estoque."
+        confirmed = ask_confirmation(
+            self.winfo_toplevel(),
+            "Cancelar venda",
+            "Tem certeza que deseja cancelar esta venda? Os itens voltam ao estoque.",
+            "Cancelar venda",
         )
         if not confirmed:
             return
@@ -248,7 +481,7 @@ class SalesScreen(customtkinter.CTkFrame):
         try:
             self.sale_service.cancel_sale(sale_id)
         except InvalidSaleDataError as error:
-            messagebox.showerror("Não foi possível cancelar", str(error))
+            show_error(self.winfo_toplevel(), "Não foi possível cancelar", str(error))
             return
 
         self.refresh_customer_and_item_options()
@@ -259,20 +492,26 @@ class SalesScreen(customtkinter.CTkFrame):
         customer_id = self.customer_id_by_name.get(selected_customer_name)
 
         if customer_id is None:
-            self.message_label.configure(text="Cadastre ao menos um cliente antes de vender.")
+            self._show_message("Cadastre ao menos um cliente antes de vender.", is_error=True)
             return
         if not self.current_cart_items:
-            self.message_label.configure(text="Adicione ao menos um item à venda.")
+            self._show_message("Adicione ao menos um item à venda.", is_error=True)
             return
 
         try:
             self.sale_service.register_sale(customer_id, self.current_cart_items)
         except (InvalidSaleDataError, InsufficientStockError) as error:
-            self.message_label.configure(text=str(error))
+            self._show_message(str(error), is_error=True)
             return
 
-        self.message_label.configure(text="")
+        self._show_message("", is_error=False)
         self.current_cart_items = []
         self._refresh_cart_display()
         self.refresh_customer_and_item_options()
+        self._refresh_selected_customer_history()
+
+    def repaint_for_theme_change(self) -> None:
+        """Hover tweens leave literal colors on the rows, which would freeze across an
+        appearance change, so both lists are rebuilt from the current tokens."""
+        self._refresh_cart_display()
         self._refresh_selected_customer_history()
