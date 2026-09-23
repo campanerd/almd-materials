@@ -68,6 +68,17 @@ def test_register_sale_rejects_an_empty_cart(sale_service, customer_id):
         sale_service.register_sale(customer_id, [])
 
 
+def test_register_sale_rejects_when_the_same_item_repeated_in_the_cart_exceeds_stock(
+    sale_service, stock_item_repository, customer_id
+):
+    item = _create_stock_item(stock_item_repository, quantity_in_stock=10, unit_price=30.0)
+
+    with pytest.raises(InsufficientStockError):
+        sale_service.register_sale(customer_id, [ItemToSell(item.id, 6), ItemToSell(item.id, 6)])
+
+    assert stock_item_repository.find_by_id(item.id).quantity_in_stock == 10
+
+
 def test_list_purchase_history_by_customer_returns_registered_sales(sale_service, stock_item_repository, customer_id):
     item = _create_stock_item(stock_item_repository)
     sale_service.register_sale(customer_id, [ItemToSell(item.id, 1)])
