@@ -23,6 +23,7 @@ class ModalDialog(customtkinter.CTkToplevel):
         self.geometry(f"{width}x{height}")
         self.resizable(False, False)
         self.configure(fg_color=theme.BG_CANVAS)
+        theme.apply_window_icon(self)
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)

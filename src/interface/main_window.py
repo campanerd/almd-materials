@@ -47,6 +47,7 @@ class MainWindow(customtkinter.CTk):
         self.geometry(WINDOW_SIZE)
         self.minsize(*MINIMUM_WINDOW_SIZE)
         self.configure(fg_color=theme.BG_CANVAS)
+        theme.apply_window_icon(self)
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)

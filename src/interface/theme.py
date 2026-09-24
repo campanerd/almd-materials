@@ -11,6 +11,7 @@ import customtkinter
 from PIL import Image
 
 ASSETS_FOLDER = Path(__file__).parent.parent.parent / "assets"
+WINDOW_ICON_PATH = ASSETS_FOLDER / "logo.ico"
 
 BRAND_DEEP = ("#12592F", "#2E7A4C")
 BRAND_MID = ("#4D8C66", "#5FB183")
@@ -95,6 +96,23 @@ def _build_font(role: str) -> customtkinter.CTkFont:
     }
     family, size, weight = specs[role]
     return customtkinter.CTkFont(family=family, size=size, weight=weight)
+
+
+def apply_window_icon(window) -> None:
+    """Replaces the default Tk feather in the titlebar and the taskbar.
+
+    CustomTkinter sets its own icon on a CTkToplevel shortly after the window is
+    mapped, so the call is repeated on a delay or the default comes back.
+    """
+
+    def set_icon() -> None:
+        try:
+            window.iconbitmap(str(WINDOW_ICON_PATH))
+        except Exception:
+            pass
+
+    set_icon()
+    window.after(300, set_icon)
 
 
 def logo_image(size: int) -> customtkinter.CTkImage:
