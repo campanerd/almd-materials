@@ -1,8 +1,10 @@
 import sqlite3
 from pathlib import Path
 
-SCHEMA_FILE_PATH = Path(__file__).parent / "schema.sql"
-DEFAULT_DATABASE_PATH = Path(__file__).parent.parent.parent / "data" / "store.db"
+from src.app_paths import persistent_data_path, resource_path
+
+SCHEMA_FILE_PATH = resource_path("src", "database", "schema.sql")
+DEFAULT_DATABASE_PATH = persistent_data_path("data", "store.db")
 
 
 def create_database_connection(database_path: Path | str = DEFAULT_DATABASE_PATH) -> sqlite3.Connection:

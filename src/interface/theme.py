@@ -5,12 +5,12 @@ appearance modes when it receives a 2-tuple. A single literal hex string freezes
 whatever mode it was created in and silently breaks the theme switch.
 """
 
-from pathlib import Path
-
 import customtkinter
 from PIL import Image
 
-ASSETS_FOLDER = Path(__file__).parent.parent.parent / "assets"
+from src.app_paths import resource_path
+
+ASSETS_FOLDER = resource_path("assets")
 WINDOW_ICON_PATH = ASSETS_FOLDER / "logo.ico"
 
 BRAND_DEEP = ("#12592F", "#2E7A4C")

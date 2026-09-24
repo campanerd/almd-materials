@@ -3,10 +3,11 @@ import sqlite3
 import uuid
 from pathlib import Path
 
+from src.app_paths import persistent_data_path
 from src.models.stock_item import StockItem
 from src.repositories.stock_item_repository import StockItemRepository
 
-DEFAULT_IMAGES_FOLDER = Path(__file__).parent.parent.parent / "data" / "item_images"
+DEFAULT_IMAGES_FOLDER = persistent_data_path("data", "item_images")
 MAX_NAME_LENGTH = 120
 MAX_DESCRIPTION_LENGTH = 300
 
