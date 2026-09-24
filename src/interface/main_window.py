@@ -12,7 +12,7 @@ from src.services.customer_service import CustomerService
 from src.services.sale_service import SaleService
 from src.services.stock_item_service import StockItemService
 
-WINDOW_TITLE = "Almoxarifado - Estoque e Vendas"
+WINDOW_TITLE = "Almeida - Estoque e Vendas"
 WINDOW_SIZE = "1280x760"
 MINIMUM_WINDOW_SIZE = (1080, 640)
 
@@ -79,7 +79,7 @@ class MainWindow(customtkinter.CTk):
         )
         customtkinter.CTkLabel(
             brand_block,
-            text="Almoxarifado",
+            text="Almeida",
             font=theme.font("brand"),
             text_color=theme.TEXT_PRIMARY,
             anchor="w",
