@@ -207,8 +207,10 @@ class StockScreen(customtkinter.CTkFrame):
         # Parsing is kept apart from the service validation: merging the two excepts
         # leaks the raw ValueError text into the interface.
         try:
-            quantity_in_stock = int(self.quantity_field.get() or 0)
-            unit_price = float((self.price_field.get() or "0").replace(",", "."))
+            quantity_text = self.quantity_field.get().strip()
+            price_text = self.price_field.get().strip()
+            quantity_in_stock = int(quantity_text) if quantity_text else None
+            unit_price = float(price_text.replace(",", ".")) if price_text else None
         except ValueError:
             self._show_message(INVALID_NUMBER_MESSAGE, is_error=True)
             return
@@ -294,8 +296,10 @@ class StockScreen(customtkinter.CTkFrame):
 
         def save() -> None:
             try:
-                quantity_in_stock = int(quantity_field.get() or 0)
-                unit_price = float((price_field.get() or "0").replace(",", "."))
+                quantity_text = quantity_field.get().strip()
+                price_text = price_field.get().strip()
+                quantity_in_stock = int(quantity_text) if quantity_text else None
+                unit_price = float(price_text.replace(",", ".")) if price_text else None
             except ValueError:
                 error_label.configure(text=INVALID_NUMBER_MESSAGE)
                 return

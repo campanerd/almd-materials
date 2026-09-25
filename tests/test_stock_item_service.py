@@ -41,9 +41,30 @@ def test_register_item_rejects_negative_quantity(stock_item_service):
         stock_item_service.register_item("Cimento", "Saco 50kg", -1, 32.5)
 
 
+def test_register_item_rejects_missing_quantity(stock_item_service):
+    with pytest.raises(InvalidStockItemDataError, match="quantidade em estoque é obrigatória"):
+        stock_item_service.register_item("Cimento", "Saco 50kg", None, 32.5)
+
+
+def test_register_item_allows_zero_quantity_when_explicitly_provided(stock_item_service):
+    item = stock_item_service.register_item("Cimento", "Saco 50kg", 0, 32.5)
+
+    assert item.quantity_in_stock == 0
+
+
 def test_register_item_rejects_negative_price(stock_item_service):
     with pytest.raises(InvalidStockItemDataError):
         stock_item_service.register_item("Cimento", "Saco 50kg", 10, -1)
+
+
+def test_register_item_rejects_missing_price(stock_item_service):
+    with pytest.raises(InvalidStockItemDataError, match="preço unitário é obrigatório"):
+        stock_item_service.register_item("Cimento", "Saco 50kg", 10, None)
+
+
+def test_register_item_rejects_zero_price(stock_item_service):
+    with pytest.raises(InvalidStockItemDataError, match="preço unitário deve ser maior que zero"):
+        stock_item_service.register_item("Cimento", "Saco 50kg", 10, 0)
 
 
 def test_register_item_rejects_name_longer_than_the_limit(stock_item_service):
