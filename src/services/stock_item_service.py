@@ -29,8 +29,8 @@ class StockItemService:
         self,
         name: str,
         description: str,
-        quantity_in_stock: int,
-        unit_price: float,
+        quantity_in_stock: int | None,
+        unit_price: float | None,
         original_image_path: str | None = None,
     ) -> StockItem:
         name = name.strip()
@@ -90,7 +90,12 @@ class StockItemService:
         return str(destination_path)
 
     @staticmethod
-    def _validate_item_data(name: str, description: str, quantity_in_stock: int, unit_price: float) -> None:
+    def _validate_item_data(
+        name: str,
+        description: str,
+        quantity_in_stock: int | None,
+        unit_price: float | None,
+    ) -> None:
         if not name:
             raise InvalidStockItemDataError("O nome do item é obrigatório.")
         if len(name) > MAX_NAME_LENGTH:
@@ -99,7 +104,11 @@ class StockItemService:
             raise InvalidStockItemDataError(
                 f"A descrição não pode ter mais que {MAX_DESCRIPTION_LENGTH} caracteres."
             )
+        if quantity_in_stock is None:
+            raise InvalidStockItemDataError("A quantidade em estoque é obrigatória.")
         if quantity_in_stock < 0:
             raise InvalidStockItemDataError("A quantidade em estoque não pode ser negativa.")
-        if unit_price < 0:
-            raise InvalidStockItemDataError("O preço unitário não pode ser negativo.")
+        if unit_price is None:
+            raise InvalidStockItemDataError("O preço unitário é obrigatório.")
+        if unit_price <= 0:
+            raise InvalidStockItemDataError("O preço unitário deve ser maior que zero.")
