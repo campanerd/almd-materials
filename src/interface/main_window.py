@@ -101,6 +101,8 @@ class MainWindow(customtkinter.CTk):
             navigation_container, width=3, height=22, corner_radius=2, fg_color=theme.ACCENT_FG
         )
 
+        self.navigation_rows: dict[str, int] = {}
+
         for row_index, page_name in enumerate((CUSTOMERS_PAGE, STOCK_PAGE, SALES_PAGE)):
             button = customtkinter.CTkButton(
                 navigation_container,
@@ -116,6 +118,7 @@ class MainWindow(customtkinter.CTk):
             )
             button.grid(row=row_index, column=0, sticky="ew", pady=3, padx=(10, 0))
             self.navigation_buttons[page_name] = button
+            self.navigation_rows[page_name] = row_index
 
         self._build_sidebar_footer(sidebar)
 
@@ -243,21 +246,18 @@ class MainWindow(customtkinter.CTk):
             )
 
     def _move_navigation_indicator_to(self, page_name: str, animated: bool = True) -> None:
-        button = self.navigation_buttons[page_name]
-        target_y = button.winfo_y() + (button.winfo_height() - 22) // 2
-
-        if not animated:
-            self.navigation_indicator.place(x=0, y=target_y)
-            return
-
-        start_y = self.navigation_indicator.winfo_y()
-        animate(
-            self.navigation_indicator,
-            NAV_INDICATOR_DURATION_MS,
-            lambda progress: self.navigation_indicator.place(
-                x=0, y=round(start_y + (target_y - start_y) * progress)
-            ),
+        # Keep the indicator in the exact same grid row as the active button.
+        # This avoids DPI-scaling drift caused by mixing winfo pixel values with
+        # CustomTkinter's scaled widget dimensions on Windows.
+        row_index = self.navigation_rows[page_name]
+        self.navigation_indicator.grid(
+            row=row_index,
+            column=0,
+            sticky="w",
+            padx=(0, 0),
+            pady=3,
         )
+        self.navigation_indicator.tkraise()
 
     def _toggle_appearance_mode(self) -> None:
         customtkinter.set_appearance_mode("dark" if self.theme_switch.get() else "light")
