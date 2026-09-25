@@ -11,9 +11,10 @@ from src.interface.components import (
     build_list_header,
     build_primary_button,
 )
-from src.interface.dialogs import ask_confirmation, show_error
+from src.interface.dialogs import ask_confirmation, ask_yes_no, show_error
 from src.models.sale import Sale
 from src.services.customer_service import CustomerService
+from src.services.receipt_service import ReceiptError, ReceiptService
 from src.services.sale_service import (
     InsufficientStockError,
     InvalidSaleDataError,
@@ -103,6 +104,7 @@ class SalesScreen(customtkinter.CTkFrame):
         self.customer_service = customer_service
         self.stock_item_service = stock_item_service
         self.sale_service = sale_service
+        self.receipt_service = ReceiptService()
 
         self.customer_id_by_name: dict[str, int] = {}
         self.item_id_by_name: dict[str, int] = {}
@@ -498,17 +500,47 @@ class SalesScreen(customtkinter.CTkFrame):
             self._show_message("Adicione ao menos um item à venda.", is_error=True)
             return
 
+        should_send_receipt = ask_yes_no(
+            self.winfo_toplevel(),
+            "Finalizar venda",
+            "Deseja enviar o recibo?",
+        )
+
+        customer = self.customer_service.find_customer_by_id(customer_id)
+        item_name_by_id = {
+            item.id: item.name for item in self.stock_item_service.list_all_items() if item.id is not None
+        }
+
         try:
-            self.sale_service.register_sale(customer_id, self.current_cart_items)
+            sale = self.sale_service.register_sale(customer_id, self.current_cart_items)
         except (InvalidSaleDataError, InsufficientStockError) as error:
             self._show_message(str(error), is_error=True)
             return
 
-        self._show_message("", is_error=False)
+        receipt_path = None
+        if should_send_receipt and customer is not None:
+            try:
+                receipt_path = self.receipt_service.generate_pdf(sale, customer, item_name_by_id)
+                self.receipt_service.open_whatsapp(customer)
+            except ReceiptError as error:
+                show_error(
+                    self.winfo_toplevel(),
+                    "Venda finalizada",
+                    f"A venda foi concluída, mas o envio do recibo não pôde ser preparado.\n\n{error}",
+                )
+
         self.current_cart_items = []
         self._refresh_cart_display()
         self.refresh_customer_and_item_options()
         self._refresh_selected_customer_history()
+
+        if receipt_path is not None:
+            self._show_message(
+                f"Venda finalizada. Recibo salvo em: {receipt_path}",
+                is_error=False,
+            )
+        else:
+            self._show_message("Venda finalizada com sucesso.", is_error=False)
 
     def repaint_for_theme_change(self) -> None:
         """Hover tweens leave literal colors on the rows, which would freeze across an

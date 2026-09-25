@@ -93,7 +93,15 @@ class ModalDialog(customtkinter.CTkToplevel):
 
 
 class ConfirmationDialog(ModalDialog):
-    def __init__(self, parent, title: str, message: str, confirm_text: str, destructive: bool = True):
+    def __init__(
+        self,
+        parent,
+        title: str,
+        message: str,
+        confirm_text: str,
+        destructive: bool = True,
+        cancel_text: str = "Cancelar",
+    ):
         super().__init__(parent, title, width=460, height=250)
         self.confirmed = False
 
@@ -107,7 +115,7 @@ class ConfirmationDialog(ModalDialog):
             wraplength=400,
         ).grid(row=0, column=0, sticky="ew")
 
-        self.add_cancel_button()
+        self.add_cancel_button(cancel_text)
 
         confirm_button = customtkinter.CTkButton(
             self.footer,
@@ -130,6 +138,19 @@ class ConfirmationDialog(ModalDialog):
 
 def ask_confirmation(parent, title: str, message: str, confirm_text: str) -> bool:
     dialog = ConfirmationDialog(parent, title, message, confirm_text)
+    dialog.show()
+    return dialog.confirmed
+
+
+def ask_yes_no(parent, title: str, message: str) -> bool:
+    dialog = ConfirmationDialog(
+        parent,
+        title,
+        message,
+        confirm_text="Sim",
+        destructive=False,
+        cancel_text="Não",
+    )
     dialog.show()
     return dialog.confirmed
 
