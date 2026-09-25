@@ -6,6 +6,7 @@ from src.interface import theme
 from src.interface.animation import animate, interpolate_color, resolve_color
 from src.interface.components import FacetRule
 from src.interface.customers_screen import CustomersScreen
+from src.interface.dashboard_screen import DashboardScreen
 from src.interface.sales_screen import SalesScreen
 from src.interface.stock_screen import StockScreen
 from src.services.customer_service import CustomerService
@@ -16,11 +17,13 @@ WINDOW_TITLE = "Almeida - Estoque e Vendas"
 WINDOW_SIZE = "1280x760"
 MINIMUM_WINDOW_SIZE = (1080, 640)
 
+DASHBOARD_PAGE = "Dashboard"
 CUSTOMERS_PAGE = "Clientes"
 STOCK_PAGE = "Estoque"
 SALES_PAGE = "Vendas"
 
 PAGE_SUBTITLES = {
+    DASHBOARD_PAGE: "Visão geral do desempenho da loja em 2026",
     CUSTOMERS_PAGE: "Cadastro e histórico de quem compra na loja",
     STOCK_PAGE: "Materiais disponíveis, quantidades e preços",
     SALES_PAGE: "Registro de vendas e histórico do cliente",
@@ -53,13 +56,13 @@ class MainWindow(customtkinter.CTk):
         self.grid_rowconfigure(0, weight=1)
 
         self.navigation_buttons: dict[str, customtkinter.CTkButton] = {}
-        self.current_page_name = CUSTOMERS_PAGE
+        self.current_page_name = DASHBOARD_PAGE
 
         self._build_sidebar()
         self._build_content_area()
         self._build_pages(customer_service, stock_item_service, sale_service)
 
-        self.after(60, lambda: self._move_navigation_indicator_to(CUSTOMERS_PAGE, animated=False))
+        self.after(60, lambda: self._move_navigation_indicator_to(DASHBOARD_PAGE, animated=False))
         self.after(80, self._apply_titlebar_theme)
 
     def _build_sidebar(self) -> None:
@@ -103,7 +106,7 @@ class MainWindow(customtkinter.CTk):
 
         self.navigation_rows: dict[str, int] = {}
 
-        for row_index, page_name in enumerate((CUSTOMERS_PAGE, STOCK_PAGE, SALES_PAGE)):
+        for row_index, page_name in enumerate((DASHBOARD_PAGE, CUSTOMERS_PAGE, STOCK_PAGE, SALES_PAGE)):
             button = customtkinter.CTkButton(
                 navigation_container,
                 text=page_name,
@@ -165,7 +168,7 @@ class MainWindow(customtkinter.CTk):
 
         self.page_title_label = customtkinter.CTkLabel(
             header,
-            text=CUSTOMERS_PAGE,
+            text=DASHBOARD_PAGE,
             font=theme.font("display"),
             text_color=theme.TEXT_PRIMARY,
             anchor="w",
@@ -174,7 +177,7 @@ class MainWindow(customtkinter.CTk):
 
         self.page_subtitle_label = customtkinter.CTkLabel(
             header,
-            text=PAGE_SUBTITLES[CUSTOMERS_PAGE],
+            text=PAGE_SUBTITLES[DASHBOARD_PAGE],
             font=theme.font("caption"),
             text_color=theme.TEXT_MUTED,
             anchor="w",
@@ -194,6 +197,7 @@ class MainWindow(customtkinter.CTk):
         stock_item_service: StockItemService,
         sale_service: SaleService,
     ) -> None:
+        self.dashboard_screen = DashboardScreen(self.page_container)
         self.customers_screen = CustomersScreen(self.page_container, customer_service)
         self.stock_screen = StockScreen(self.page_container, stock_item_service)
         self.sales_screen = SalesScreen(
@@ -201,6 +205,7 @@ class MainWindow(customtkinter.CTk):
         )
 
         self.pages = {
+            DASHBOARD_PAGE: self.dashboard_screen,
             CUSTOMERS_PAGE: self.customers_screen,
             STOCK_PAGE: self.stock_screen,
             SALES_PAGE: self.sales_screen,
@@ -209,8 +214,8 @@ class MainWindow(customtkinter.CTk):
             page.grid(row=0, column=0, sticky="nsew")
             page.grid_remove()
 
-        self.customers_screen.grid()
-        self._highlight_navigation_button(CUSTOMERS_PAGE)
+        self.dashboard_screen.grid()
+        self._highlight_navigation_button(DASHBOARD_PAGE)
 
     def show_page(self, page_name: str) -> None:
         if page_name == self.current_page_name:
@@ -241,6 +246,7 @@ class MainWindow(customtkinter.CTk):
             is_active = page_name == active_page_name
             button.configure(
                 fg_color=theme.NAV_PILL if is_active else "transparent",
+                hover_color=theme.ACCENT_HOVER if is_active else theme.ROW_HOVER,
                 text_color=theme.NAV_PILL_TEXT if is_active else theme.TEXT_SECONDARY,
                 font=theme.font("body_strong") if is_active else theme.font("nav"),
             )
